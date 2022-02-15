@@ -105,6 +105,11 @@ def test_Tensor():
     assert obj1.tensor() == obj2.tensor()
     assert isinstance(obj1.tensor(), Array)
 
+def test_Tensor_add(): #TODO
+    x,y = symbols("x y")
+    obj1 = Tensor([[x,y],[y,y]])
+    obj2 = Tensor([[y,x],[x,x]])
+    assert isinstance(obj1+obj2, Tensor)
 
 def test_Tensor_simplify():
     x, y, z = symbols("x y z")

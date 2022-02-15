@@ -1,3 +1,5 @@
+from __future__ import annotations
+from typing import List
 import numpy as np
 import sympy
 from sympy import simplify, tensorcontraction, tensorproduct
@@ -206,6 +208,33 @@ class Tensor:
         interpretable_representation += self.arr.__repr__()
         return interpretable_representation
 
+    def __add__(self, other:Tensor):
+        if self.config==other.config:
+            return Tensor(arr=self.arr+other.arr, config=self.config)
+        else:
+            raise ValueError("Invalid Shape")
+    
+    def __sub__(self, other:Tensor):
+        if self.config==other.config:
+            return Tensor(arr=self.arr-other.arr, config=self.config)
+        else:
+            raise ValueError("Invalid Shape")
+
+    def __mul__(self, other: Union[Tensor, sympy.core.expr.Expr]):
+        if isinstance(other, sympy.core.expr.Expr):
+                return Tensor(arr=other*self.arr, config=self.config)
+        elif isinstance(other, Tensor):
+            if len(other.config)==1:
+                if other.__class__==self.__class__:
+                    return Tensor(arr=other.arr*self.arr, config=self.arr)
+        else:
+            raise TypeError("Multiplication only valid for scalars, use tensor_product instead")
+            
+            
+    def __rmul__(self, other: Union[Tensor, sympy.core.expr.Expr]):
+        return self.__mul__(other)
+
+
     def tensor(self):
         """
         Returns the sympy Array
@@ -368,6 +397,74 @@ class BaseRelativityTensor(Tensor):
         else:
             raise TypeError(
                 "arguments variables and functions should be a list, tuple or set"
+            )
+    
+    def __add__(self, other:BaseRelativityTensor):
+        return BaseRelativityTensor(
+            super().__add__(other).arr,
+            self.syms,
+            config=self.config,
+            parent_metric=self.parent_metric,
+            variables=self.variables,
+            functions=self.functions,
+            name=self.name
+            )
+    
+    def __sub__(self, other:BaseRelativityTensor):
+        return BaseRelativityTensor(
+            super().__sub__(other).arr,
+            self.syms,
+            config=self.config,
+            parent_metric=self.parent_metric,
+            variables=self.variables,
+            functions=self.functions,
+            name=self.name
+            )
+
+    def __mul__(self, other: Union[Tensor, sympy.core.expr.Expr]):
+        return BaseRelativityTensor(
+            super().__mul__(other).arr,
+            self.syms,
+            config=self.config,
+            parent_metric=self.parent_metric,
+            variables=self.variables,
+            functions=self.functions,
+            name=self.name
+            )
+
+    def __rmul__(self, other: Union[Tensor, sympy.core.expr.Expr]):
+        return BaseRelativityTensor(
+            super().__mul__(other).arr,
+            self.syms,
+            config=self.config,
+            parent_metric=self.parent_metric,
+            variables=self.variables,
+            functions=self.functions,
+            name=self.name
+            )
+
+
+
+    def __call__(self, config:str, name="Generic Tensor"):
+        if self.parent_metric is None:
+            raise ValueError("Parent metric not defined")
+        new_arr = self.arr
+        for i, i_config in enumerate(config):
+            if i_config=="l" or i_config=="u":
+                if i_config==self.config[i]:
+                    continue
+                else:
+                    new_arr = tensorcontraction(tensorproduct(self.parent_metric.tensor(), new_arr), (0,i+2))
+            else:
+                raise ValueError("Invalid config")
+        return BaseRelativityTensor(
+            new_arr, 
+            self.syms, 
+            config=config,
+            parent_metric=self.parent_metric, 
+            variables=self.variables, 
+            functions=self.functions,
+            name=name
             )
 
     @property
