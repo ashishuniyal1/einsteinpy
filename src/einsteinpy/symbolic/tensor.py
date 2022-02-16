@@ -1,10 +1,12 @@
 from __future__ import annotations
-from typing import List
+from typing import List, Union
 import numpy as np
 import sympy
 from sympy import simplify, tensorcontraction, tensorproduct
 from sympy.core.expr import Expr
 from sympy.core.function import AppliedUndef, UndefinedFunction
+#from einsteinpy.symbolic import ChristoffelSymbols
+from sympy.tensor.tensor import TensorIndexType, TensorIndex, TensorHead, tensor_indices
 
 from einsteinpy.symbolic.helpers import (
     _change_name,
@@ -399,27 +401,27 @@ class BaseRelativityTensor(Tensor):
                 "arguments variables and functions should be a list, tuple or set"
             )
     
-    def __add__(self, other:BaseRelativityTensor):
-        return BaseRelativityTensor(
-            super().__add__(other).arr,
-            self.syms,
-            config=self.config,
-            parent_metric=self.parent_metric,
-            variables=self.variables,
-            functions=self.functions,
-            name=self.name
-            )
+    # def __add__(self, other:BaseRelativityTensor):
+    #     return BaseRelativityTensor(
+    #         super().__add__(other).arr,
+    #         self.syms,
+    #         config=self.config,
+    #         parent_metric=self.parent_metric,
+    #         variables=self.variables,
+    #         functions=self.functions,
+    #         name=self.name
+    #         )
     
-    def __sub__(self, other:BaseRelativityTensor):
-        return BaseRelativityTensor(
-            super().__sub__(other).arr,
-            self.syms,
-            config=self.config,
-            parent_metric=self.parent_metric,
-            variables=self.variables,
-            functions=self.functions,
-            name=self.name
-            )
+    # def __sub__(self, other:BaseRelativityTensor):
+    #     return BaseRelativityTensor(
+    #         super().__sub__(other).arr,
+    #         self.syms,
+    #         config=self.config,
+    #         parent_metric=self.parent_metric,
+    #         variables=self.variables,
+    #         functions=self.functions,
+    #         name=self.name
+    #         )
 
     def __mul__(self, other: Union[Tensor, sympy.core.expr.Expr]):
         return BaseRelativityTensor(
@@ -443,36 +445,13 @@ class BaseRelativityTensor(Tensor):
             name=self.name
             )
 
-
-
-    def __call__(self, config:str, name="Generic Tensor"):
-        if self.parent_metric is None:
-            raise ValueError("Parent metric not defined")
-        new_arr = self.arr
-        for i, i_config in enumerate(config):
-            if i_config=="l" or i_config=="u":
-                if i_config==self.config[i]:
-                    continue
-                else:
-                    new_arr = tensorcontraction(tensorproduct(self.parent_metric.tensor(), new_arr), (0,i+2))
-            else:
-                raise ValueError("Invalid config")
-        return BaseRelativityTensor(
-            new_arr, 
-            self.syms, 
-            config=config,
-            parent_metric=self.parent_metric, 
-            variables=self.variables, 
-            functions=self.functions,
-            name=name
-            )
-
     @property
     def parent_metric(self):
         """
         Returns the Metric from which Tensor was derived/associated, if available.
         """
         return self._parent_metric
+        
 
     def symbols(self):
         """
@@ -552,3 +531,70 @@ class BaseRelativityTensor(Tensor):
             functions=self.functions,
             name=_change_name(self.name, context="__lt"),
         )
+
+    # def cov_derivative(self):
+    #     gamma = ChristoffelSymbols.from_metric(self.parent_metric)
+    #     if self.parent_metric is None:
+    #         raise ValueError("Parent metric not defined")
+    #     else:
+
+class IndexRelativityTensor(BaseRelativityTensor):
+    coord_dict = {}
+    metric_index = None
+
+    def __init__(self, tensor:BaseRelativityTensor=None, name=None,indices=None, *args, **kwargs):
+        if tensor is None:
+            super().__init__(name=name, *args, **kwargs)
+        else:
+            super().__init__(
+                tensor.arr,
+                tensor.syms,
+                tensor.config,
+                tensor.parent_metric,
+                name=name,
+                *args,
+                **kwargs
+            )
+        if IndexRelativityTensor.metric_index is None:
+            self.update_metric_index()
+        sympy_tensor = TensorHead(self.name, len(self.config)*[IndexRelativityTensor.metric_index])
+        if indices is not None:      
+            IndexRelativityTensor.coord_dict.update({sympy_tensor(indices):self.tensor()})
+        self.sympy_tensor = sympy_tensor
+
+    # @property
+    # def sympy_tensor(self):
+    #     return self.sympy_tensor
+
+    def update_indices(self, indices):
+        IndexRelativityTensor.coord_dict.update({self.sympy_tensor(indices):self.tensor()})
+
+    def update_metric_index(self, dummy_name=None):
+        metric_index = TensorIndexType(self.parent_metric.name, dummy_name=dummy_name)
+        metric_index.set_metric(self.parent_metric.tensor())
+        IndexRelativityTensor.metric_index = metric_index
+        IndexRelativityTensor.coord_dict.update({metric_index:metric_index.metric})
+
+    def __call__(self, indices=None):
+        if indices is not None:
+            return self.sympy_tensor(indices)
+        else:
+            return self.sympy_tensor
+        
+    # @classmethod
+    # def from_BaseRelativityTensor(tensor, indices=None):
+    #     #new_tensor = TensorHead(tensor.name, len(tensor.config)*[IndexRelativityTensor.metric_index])   
+    #     #if indices is not None:   
+    #     #    IndexRelativityTensor.coord_dict.update({new_tensor(indices):tensor.tensor()})
+    #     return IndexRelativityTensor(
+    #         indices,
+
+
+
+    #     )
+    @classmethod
+    def update_metric_index_from_metric(self, metric, metric_dummy_name=None):
+        metric_index = TensorIndexType(metric.name, dummy_name=metric_dummy_name)
+        metric_index.set_metric(metric.tensor())
+        IndexRelativityTensor.metric_index = metric_index
+        IndexRelativityTensor.coord_dict.update({metric_index:metric_index.metric})
