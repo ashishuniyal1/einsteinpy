@@ -6,7 +6,7 @@ from sympy import simplify, tensorcontraction, tensorproduct
 from sympy.core.expr import Expr
 from sympy.core.function import AppliedUndef, UndefinedFunction
 #from einsteinpy.symbolic import ChristoffelSymbols
-from sympy.tensor.tensor import TensorIndexType, TensorIndex, TensorHead, tensor_indices
+from sympy.tensor.tensor import TensorIndexType, TensorIndex, TensorHead, TensorSymmetry, tensor_indices
 
 from einsteinpy.symbolic.helpers import (
     _change_name,
@@ -532,13 +532,11 @@ class BaseRelativityTensor(Tensor):
             name=_change_name(self.name, context="__lt"),
         )
 
-    # def cov_derivative(self):
-    #     gamma = ChristoffelSymbols.from_metric(self.parent_metric)
-    #     if self.parent_metric is None:
-    #         raise ValueError("Parent metric not defined")
-    #     else:
 
 class IndexRelativityTensor(BaseRelativityTensor):
+    """
+    Class for index related calculations in GR
+    """
     coord_dict = {}
     metric_index = None
 
@@ -559,7 +557,7 @@ class IndexRelativityTensor(BaseRelativityTensor):
             self.update_metric_index()
         sympy_tensor = TensorHead(self.name, len(self.config)*[IndexRelativityTensor.metric_index])
         if indices is not None:      
-            IndexRelativityTensor.coord_dict.update({sympy_tensor(indices):self.tensor()})
+            IndexRelativityTensor.coord_dict.update({sympy_tensor(*indices):self.tensor()})
         self.sympy_tensor = sympy_tensor
 
     # @property
@@ -567,20 +565,37 @@ class IndexRelativityTensor(BaseRelativityTensor):
     #     return self.sympy_tensor
 
     def update_indices(self, indices):
-        IndexRelativityTensor.coord_dict.update({self.sympy_tensor(indices):self.tensor()})
+        IndexRelativityTensor.coord_dict.update({self.sympy_tensor(*indices):self.tensor()})
 
-    def update_metric_index(self, dummy_name=None):
-        metric_index = TensorIndexType(self.parent_metric.name, dummy_name=dummy_name)
-        metric_index.set_metric(self.parent_metric.tensor())
+    def update_metric_index(self, tensor_index_name="L", metric_name=None, dummy_name=None):
+        if metric_name is None:
+            metric_name=self.parent_metric.name
+        metric_index = TensorIndexType(
+            tensor_index_name,
+            dummy_name=dummy_name,
+            dim=4,
+            metric_symmetry=1,
+            metric_name=metric_name
+            )
+        #metric_index.set_metric(self.parent_metric.tensor())
         IndexRelativityTensor.metric_index = metric_index
-        IndexRelativityTensor.coord_dict.update({metric_index:metric_index.metric})
+        IndexRelativityTensor.coord_dict.update({
+            metric_index:self.parent_metric.tensor(),
+            #metric_index.metric:self.parent_metric.tensor()
+            })
 
-    def __call__(self, indices=None):
-        if indices is not None:
-            return self.sympy_tensor(indices)
-        else:
-            return self.sympy_tensor
-        
+    def __call__(self, *indices):
+        #if indices is not None:
+        #    return self.sympy_tensor(indices)
+        #else:
+        return self.sympy_tensor(*indices)
+
+    # def cov_derivative(self):    #TODO
+    #     gamma = ChristoffelSymbols.from_metric(self.parent_metric)
+    #     if self.parent_metric is None:
+    #         raise ValueError("Parent metric not defined")
+    #     else:
+
     # @classmethod
     # def from_BaseRelativityTensor(tensor, indices=None):
     #     #new_tensor = TensorHead(tensor.name, len(tensor.config)*[IndexRelativityTensor.metric_index])   
@@ -588,13 +603,27 @@ class IndexRelativityTensor(BaseRelativityTensor):
     #     #    IndexRelativityTensor.coord_dict.update({new_tensor(indices):tensor.tensor()})
     #     return IndexRelativityTensor(
     #         indices,
-
-
-
     #     )
+    
     @classmethod
-    def update_metric_index_from_metric(self, metric, metric_dummy_name=None):
-        metric_index = TensorIndexType(metric.name, dummy_name=metric_dummy_name)
-        metric_index.set_metric(metric.tensor())
+    def update_metric_index_from_metric(cls, metric:MetricTensor, tensor_index_name="L", metric_name=None, metric_indices:str=None, dummy_name=None):
+        if metric_name is None:
+            metric_name = metric.name
+        metric_index = TensorIndexType(
+            tensor_index_name, 
+            dummy_name=dummy_name,
+            dim=4, 
+            metric_symmetry=1,
+            metric_name=metric_name
+            )
         IndexRelativityTensor.metric_index = metric_index
-        IndexRelativityTensor.coord_dict.update({metric_index:metric_index.metric})
+        IndexRelativityTensor.coord_dict.update({
+            metric_index:metric.tensor(),
+            #metric_index.metric:metric.tensor(),
+            })
+        if metric_indices is not None:
+            metric_indices = tensor_indices(metric_indices, metric_index)
+            IndexRelativityTensor.coord_dict.update({
+                metric_index.metric(*metric_indices):metric.inv().tensor()
+            })
+            return metric_indices
